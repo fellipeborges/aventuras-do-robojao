@@ -6,7 +6,7 @@
 // "andar para esquerda"
 // "pegar prêmio"
 
-const NOME_DO_ROBO = "ROBONILDO";
+const NOME_DO_ROBO = "ROBOJÃO";
 
 const COMANDOS_DO_ROBO = [
 ];
@@ -37,6 +37,86 @@ const ARMADILHAS = {
 
 let casaDoRobo = CASA_INICIAL;
 let jogoEmAndamento = false;
+let contextoDeAudio = null;
+
+function prepararSom() {
+  const AudioContexto = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContexto) {
+    return null;
+  }
+
+  if (!contextoDeAudio) {
+    contextoDeAudio = new AudioContexto();
+  }
+
+  if (contextoDeAudio.state === "suspended") {
+    contextoDeAudio.resume();
+  }
+
+  return contextoDeAudio;
+}
+
+function tocarTom(frequencia, duracao, atraso, tipo, volume) {
+  const contexto = prepararSom();
+  if (!contexto) {
+    return;
+  }
+
+  const inicio = contexto.currentTime + atraso;
+  const oscilador = contexto.createOscillator();
+  const ganho = contexto.createGain();
+
+  oscilador.type = tipo;
+  oscilador.frequency.setValueAtTime(frequencia, inicio);
+  ganho.gain.setValueAtTime(volume, inicio);
+  ganho.gain.exponentialRampToValueAtTime(0.001, inicio + duracao);
+  oscilador.connect(ganho);
+  ganho.connect(contexto.destination);
+  oscilador.start(inicio);
+  oscilador.stop(inicio + duracao);
+}
+
+function tocarSomDePulo() {
+  const contexto = prepararSom();
+  if (!contexto) {
+    return;
+  }
+
+  const inicio = contexto.currentTime;
+  const oscilador = contexto.createOscillator();
+  const ganho = contexto.createGain();
+
+  oscilador.type = "square";
+  oscilador.frequency.setValueAtTime(280, inicio);
+  oscilador.frequency.exponentialRampToValueAtTime(720, inicio + 0.1);
+  ganho.gain.setValueAtTime(0.08, inicio);
+  ganho.gain.exponentialRampToValueAtTime(0.001, inicio + 0.12);
+  oscilador.connect(ganho);
+  ganho.connect(contexto.destination);
+  oscilador.start(inicio);
+  oscilador.stop(inicio + 0.12);
+}
+
+function tocarSomDeDerrota(atrasoInicial) {
+  const notas = [
+    { frequencia: 392, duracao: 0.16, atraso: 0 },
+    { frequencia: 311, duracao: 0.16, atraso: 0.18 },
+    { frequencia: 196, duracao: 0.38, atraso: 0.36 },
+  ];
+
+  notas.forEach((nota) => {
+    tocarTom(nota.frequencia, nota.duracao, atrasoInicial + nota.atraso, "triangle", 0.12);
+  });
+}
+
+function tocarSomDeVitoria() {
+  const notas = [523, 659, 784, 1046];
+
+  notas.forEach((frequencia, indice) => {
+    const ultima = indice === notas.length - 1;
+    tocarTom(frequencia, ultima ? 0.32 : 0.14, indice * 0.12, "square", 0.07);
+  });
+}
 
 function esperar(milissegundos) {
   return new Promise((resolver) => {
@@ -195,12 +275,14 @@ function andar(comando) {
   casaDoRobo = destino;
   casaDoNumero(destino).appendChild(document.getElementById("robo"));
   marcarCasaDoRobo();
+  tocarSomDePulo();
 
   if (ARMADILHAS[destino]) {
     casaDoNumero(destino).classList.add("armadilha-ativada");
     return {
       encerrou: true,
       vitoria: false,
+      moveu: true,
       frase: "FIM DO JOGO",
       motivo: ARMADILHAS[destino].motivo,
     };
@@ -265,6 +347,7 @@ async function executarComandos() {
 
   jogoEmAndamento = true;
   document.getElementById("botao-iniciar").disabled = true;
+  prepararSom();
 
   for (let indice = 0; indice < COMANDOS_DO_ROBO.length; indice += 1) {
     await esperar(ESPERA_ENTRE_COMANDOS_MS);
@@ -275,6 +358,11 @@ async function executarComandos() {
     if (resultado.encerrou) {
       const classe = resultado.vitoria ? "comando-vitoria" : "comando-derrota";
       marcarComando(indice, classe);
+      if (resultado.vitoria) {
+        tocarSomDeVitoria();
+      } else {
+        tocarSomDeDerrota(resultado.moveu ? 0.16 : 0);
+      }
       terminarJogo(resultado.frase, resultado.motivo);
       return;
     }
@@ -282,6 +370,7 @@ async function executarComandos() {
     marcarComando(indice, "comando-feito");
   }
 
+  tocarSomDeDerrota(0);
   terminarJogo("FIM DO JOGO", "Os comandos acabaram e o prêmio ficou para trás.");
 }
 

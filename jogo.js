@@ -9,6 +9,8 @@
 const NOME_DO_ROBO = "ROBOJÃO";
 
 const COMANDOS_DO_ROBO = [
+  "andar para baixo",
+  "andar para baixo",
 ];
 
 const CASA_INICIAL = 1;
